@@ -1,0 +1,113 @@
+---
+# Erlang CI.
+# - Precommit: the same `rebar3 precommit` gate contributors run locally
+#   (fmt-check, compile, xref, hank, dialyzer, ex_doc, eunit + ct with
+#   cover, 100 % line coverage), on the OTP / rebar3 pinned in
+#   `.tool-versions`.
+# - Test: eunit + ct on the older OTP releases the package supports, without
+#   the coverage gate (which lines a run reaches varies by OTP).
+# - grpc-interop: gRPC's own interop client and grpcurl against the interop
+#   TestService, on every supported OTP.
+name: Erlang
+
+"on":
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "*"
+  workflow_dispatch: {}
+  merge_group:
+
+concurrency:
+  group: ${{github.workflow}}-${{github.ref}}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  precommit:
+    name: Precommit
+
+    runs-on: ubuntu-26.04
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24
+        id: setup-beam
+        with:
+          version-type: strict
+          version-file: .tool-versions
+
+      - name: Restore rebar3 cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/rebar3
+            _build
+          key: "rebar3-${{ runner.os }}-otp-${{ steps.setup-beam.outputs.otp-version }}-\
+            ${{ hashFiles('rebar.config', 'rebar.lock') }}"
+          restore-keys: |
+            rebar3-${{ runner.os }}-otp-${{ steps.setup-beam.outputs.otp-version }}-
+
+      - name: Precommit
+        run: rebar3 precommit
+
+  test:
+    name: Test (OTP ${{ matrix.otp }})
+
+    runs-on: ubuntu-26.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        otp: ["27", "28"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24
+        with:
+          otp-version: ${{ matrix.otp }}
+          rebar3-version: "3"
+
+      - name: Test
+        run: rebar3 do eunit, ct
+
+  # gRPC interop with gRPC's own client: `grpc_interop.sh` builds the pinned
+  # grpc-go interop client and runs the interop suite's server test cases
+  # with it, against the TestService served through the adapter, then has
+  # grpcurl list, describe and call the services through server reflection.
+  # The suite's other cases use a hand-written client, so a bug both sides
+  # share passes them; this one is written by the gRPC team.
+  grpc-interop:
+    name: grpc-interop (OTP ${{ matrix.otp }})
+
+    runs-on: ubuntu-26.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        otp: ["27", "28", "29"]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124 # v1.24
+        with:
+          otp-version: ${{ matrix.otp }}
+          rebar3-version: "3"
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - name: Compile test profile
+        run: rebar3 as test compile
+
+      - name: Run gRPC interop
+        run: ./scripts/grpc_interop.sh

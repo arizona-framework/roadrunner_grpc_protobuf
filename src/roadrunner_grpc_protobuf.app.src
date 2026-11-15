@@ -1,0 +1,19 @@
+{application, roadrunner_grpc_protobuf, [
+    {description, "Protocol Buffers for Roadrunner's gRPC, with gpb."},
+    {vsn, semver},
+    {registered, []},
+    {applications, [
+        kernel,
+        stdlib,
+        roadrunner
+    ]},
+    {env, []},
+    {modules, []},
+    {licenses, ["Apache-2.0"]},
+    {links, [
+        {"GitHub", "https://github.com/arizona-framework/roadrunner_grpc_protobuf"},
+        {"Docs", "https://hexdocs.pm/roadrunner_grpc_protobuf"},
+        {"Issues", "https://github.com/arizona-framework/roadrunner_grpc_protobuf/issues"},
+        {"Roadrunner", "https://github.com/arizona-framework/roadrunner"}
+    ]}
+]}.
