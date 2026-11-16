@@ -80,6 +80,11 @@ Then build the service with `roadrunner_grpc_protobuf:service/3` and put
 }).
 ```
 
+The service name is its full gRPC name as a binary
+(`~"helloworld.Greeter"`), or its name in the gpb module as an atom:
+`'Greeter'` with the options above, or `'helloworld.Greeter'` when gpb's
+`use_packages` option is set.
+
 `service/4` takes options to name the functions another way, or to answer
 `UNIMPLEMENTED` for a method your module does not export. See the
 [module documentation](src/roadrunner_grpc_protobuf.erl) for them, and

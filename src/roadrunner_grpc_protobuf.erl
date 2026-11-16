@@ -12,7 +12,7 @@ roadrunner_listener:start_link(my_listener, #{
     protocols => [http2],
     body_buffering => manual,
     routes => roadrunner_grpc:routes(#{
-        services => [roadrunner_grpc_protobuf:service(helloworld_pb, 'helloworld.Greeter', greeter)],
+        services => [roadrunner_grpc_protobuf:service(helloworld_pb, ~"helloworld.Greeter", greeter)],
         codecs => [roadrunner_grpc_protobuf]
     })
 }).
@@ -103,9 +103,10 @@ service(GpbModule, Service, Module) ->
 
 -doc """
 The service `Service` of `GpbModule`, its methods in `Module`, for
-`roadrunner_grpc:routes/1`'s `services`. `Service` is its name in the gpb
-module (an atom, such as `'helloworld.Greeter'`) or its full gRPC name (a
-binary, such as `~"helloworld.Greeter"`).
+`roadrunner_grpc:routes/1`'s `services`. `Service` is its full gRPC name
+(a binary, such as `~"helloworld.Greeter"`) or its name in the gpb module
+(an atom): `'Greeter'`, or `'helloworld.Greeter'` when the module was
+generated with gpb's `use_packages` option.
 
 A `GpbModule` that is not a module that loads, or has no services, raises
 `{invalid_gpb_module, GpbModule}`, a `Module` that is not an atom
