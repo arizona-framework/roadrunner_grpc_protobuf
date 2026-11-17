@@ -3,10 +3,11 @@
 # Run gRPC's official interop client and grpcurl against the adapter.
 #
 # Builds the pinned grpc-go interop client and grpcurl (`go install`,
-# checked against the Go checksum database) and runs two cases of
+# checked against the Go checksum database) and runs three cases of
 # `roadrunner_grpc_protobuf_interop_SUITE`. `official_client` brings up the
 # interop TestService and runs the server test cases the suite lists, each
-# in a run of its own. `grpcurl` lists, describes and calls the services
+# in a run of its own, over h2c; `official_client_tls` runs them again over
+# TLS, with a CA made for the run. `grpcurl` lists, describes and calls the services
 # knowing them only through server reflection. grpc-go has no client_compressed_* or
 # server_compressed_* cases; the suite notes them as unsupported, and the
 # gzip and deflate paths are covered by the suite's own cases.
@@ -60,4 +61,4 @@ fi
 
 GRPC_INTEROP_CLIENT="$CLIENT" GRPCURL="$GRPCURL" rebar3 ct \
     --suite=test/roadrunner_grpc_protobuf_interop_SUITE \
-    --case=official_client,grpcurl || exit 1
+    --case=official_client,official_client_tls,grpcurl || exit 1
