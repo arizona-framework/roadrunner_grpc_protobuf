@@ -121,7 +121,9 @@ I also accept coffees ☕
 Contributions are welcome! Run `rebar3 precommit` before opening a pull request:
 it checks formatting, runs xref, hank, dialyzer, and the docs build, and runs the
 tests with a 100% coverage gate. `./scripts/grpc_interop.sh` (it needs Go)
-runs gRPC's own interop client and grpcurl against the adapter.
+runs gRPC's own interop client against the adapter over plaintext (h2c) and
+TLS, and grpcurl over plaintext. gRPC has no interop client for HTTP/3, so
+there is no interop run over HTTP/3.
 
 ## License
 

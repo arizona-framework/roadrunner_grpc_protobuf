@@ -10,7 +10,9 @@ doc/interop-test-descriptions.md with the hand-written client
 client over them when one is found, `GRPC_INTEROP_CLIENT` or an
 `interop_client` on the PATH (grpc-go's, `go install
 google.golang.org/grpc/interop/client@latest`, renamed), and is skipped
-otherwise. `grpcurl` lists, describes and calls the services through
+otherwise. `official_client_tls` runs the same cases over TLS (h2 by
+ALPN), against a listener whose certificate a CA made at test time
+signs. `grpcurl` lists, describes and calls the services through
 server reflection with the grpcurl given in `GRPCURL` or found on the
 PATH, and is skipped without one.
 """.
@@ -20,6 +22,7 @@ PATH, and is skipped without one.
 -include_lib("common_test/include/ct.hrl").
 -include_lib("stdlib/include/assert.hrl").
 -include_lib("gpb/descr_src/gpb_descriptor.hrl").
+-include_lib("public_key/include/public_key.hrl").
 
 -export([suite/0, all/0, groups/0, init_per_suite/1, end_per_suite/1]).
 -export([
@@ -45,12 +48,16 @@ PATH, and is skipped without one.
     timeout_on_sleeping_server/1,
     reflection/1,
     official_client/1,
+    official_client_tls/1,
     grpcurl/1
 ]).
 
 -define(PB, test_pb).
 -define(F, roadrunner_grpc_protobuf_wire).
 -define(SVC, ~"/grpc.testing.TestService/").
+%% The host name gRPC's interop clients check the server's certificate
+%% against by default, which the test certificate is made out to.
+-define(TLS_HOST, "foo.test.google.fr").
 
 %% The server cases gRPC's interop clients run against a server.
 -define(OFFICIAL_CASES, [
@@ -78,7 +85,7 @@ suite() ->
     [{timetrap, {seconds, 60}}].
 
 all() ->
-    [{group, interop}, official_client, grpcurl].
+    [{group, interop}, official_client, official_client_tls, grpcurl].
 
 groups() ->
     [
@@ -343,23 +350,83 @@ timeout_on_sleeping_server(Config) ->
 official_client(Config) ->
     case interop_client() of
         false ->
-            {skip, "no gRPC interop client (GRPC_INTEROP_CLIENT or interop_client on PATH)"};
+            no_interop_client();
         Client ->
-            Port = integer_to_list(?config(port, Config)),
-            Results = [{Case, run_client(Client, Port, Case)} || Case <- ?OFFICIAL_CASES],
-            ct:log("~p", [Results]),
-            Failed = [{Case, Output} || {Case, {failed, Output}} <- Results],
-            Unsupported = [Case || {Case, unsupported} <- Results],
-            ?assertEqual([], Failed),
-            case length(Unsupported) of
-                Count when Count =:= length(Results) ->
-                    ct:fail(no_interop_case_ran);
-                _ ->
-                    {comment,
-                        lists:flatten(
-                            io_lib:format("unsupported by the client: ~p", [Unsupported])
-                        )}
+            official_cases(Client, ?config(port, Config), ["--use_tls=false"])
+    end.
+
+%% The same cases over TLS, h2 by ALPN, the client trusting only the CA
+%% made for the run.
+official_client_tls(Config) ->
+    case interop_client() of
+        false ->
+            no_interop_client();
+        Client ->
+            {ServerOpts, CaFile} = test_certs(?config(priv_dir, Config)),
+            {ok, Pid} = roadrunner_listener:start_link(official_client_tls, #{
+                port => 0,
+                protocols => [http2],
+                body_buffering => manual,
+                tls => ServerOpts,
+                routes => roadrunner_grpc_protobuf_interop:routes(#{reflection => true})
+            }),
+            true = unlink(Pid),
+            try
+                official_cases(Client, roadrunner_listener:port(official_client_tls), [
+                    "--use_tls=true",
+                    "--use_test_ca=true",
+                    "--ca_file=" ++ CaFile,
+                    "--server_host_override=" ++ ?TLS_HOST
+                ])
+            after
+                ok = roadrunner_listener:stop(official_client_tls)
             end
+    end.
+
+no_interop_client() ->
+    {skip, "no gRPC interop client (GRPC_INTEROP_CLIENT or interop_client on PATH)"}.
+
+%% The server's TLS options and the file of the CA that signs its
+%% certificate, made out to `?TLS_HOST`.
+test_certs(Dir) ->
+    SubjectAltName = #'Extension'{
+        extnID = ?'id-ce-subjectAltName',
+        critical = false,
+        extnValue = [{dNSName, ?TLS_HOST}]
+    },
+    Chain = fun(Extensions) ->
+        Cert = [{key, {namedCurve, secp256r1}}, {digest, sha256}],
+        #{root => Cert, intermediates => [], peer => [{extensions, Extensions} | Cert]}
+    end,
+    %% The client config trusts the server chain's root.
+    #{server_config := ServerConfig, client_config := ClientConfig} = public_key:pkix_test_data(#{
+        server_chain => Chain([SubjectAltName]),
+        client_chain => Chain([])
+    }),
+    {cacerts, CaCerts} = lists:keyfind(cacerts, 1, ClientConfig),
+    CaFile = filename:join(Dir, "interop_ca.pem"),
+    ok = file:write_file(
+        CaFile, public_key:pem_encode([{'Certificate', Der, not_encrypted} || Der <- CaCerts])
+    ),
+    {[Opt || {Key, _} = Opt <- ServerConfig, Key =/= cacerts], CaFile}.
+
+official_cases(Client, Port, TransportArgs) ->
+    Results = [
+        {Case, run_client(Client, integer_to_list(Port), TransportArgs, Case)}
+     || Case <- ?OFFICIAL_CASES
+    ],
+    ct:log("~p", [Results]),
+    Failed = [{Case, Output} || {Case, {failed, Output}} <- Results],
+    Unsupported = [Case || {Case, unsupported} <- Results],
+    ?assertEqual([], Failed),
+    case length(Unsupported) of
+        Count when Count =:= length(Results) ->
+            ct:fail(no_interop_case_ran);
+        _ ->
+            {comment,
+                lists:flatten(
+                    io_lib:format("unsupported by the client: ~p", [Unsupported])
+                )}
     end.
 
 interop_client() ->
@@ -368,13 +435,13 @@ interop_client() ->
         Path -> Path
     end.
 
-run_client(Client, Port, Case) ->
+run_client(Client, Port, TransportArgs, Case) ->
     Port1 = open_port({spawn_executable, Client}, [
         {args, [
             "--server_host=127.0.0.1",
             "--server_port=" ++ Port,
-            "--use_tls=false",
             "--test_case=" ++ Case
+            | TransportArgs
         ]},
         exit_status,
         stderr_to_stdout,
