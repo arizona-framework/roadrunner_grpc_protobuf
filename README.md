@@ -12,15 +12,11 @@ list, describe and call your services.
 
 ## Installation
 
-Roadrunner's gRPC ships in its 0.17 release, now a release candidate on Hex.
 Add both to your `rebar.config`, with `rebar3_gpb_plugin` to generate the gpb
 module from your `.proto` files:
 
 ```erlang
-{deps, [
-    {roadrunner, "0.17.0-rc.1"},
-    {roadrunner_grpc_protobuf, "0.1.0-rc.1"}
-]}.
+{deps, [roadrunner, roadrunner_grpc_protobuf]}.
 
 {plugins, [rebar3_gpb_plugin]}.
 {gpb_opts, [
