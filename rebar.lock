@@ -1,4 +1,8 @@
-[{<<"roadrunner">>,
-  {git,"https://github.com/arizona-framework/roadrunner.git",
-       {ref,"2c467b274465b241c4d110892f08b0bc021da47c"}},
-  0}].
+{"1.2.0",
+[{<<"roadrunner">>,{pkg,<<"roadrunner">>,<<"0.17.0-rc.1">>},0}]}.
+[
+{pkg_hash,[
+ {<<"roadrunner">>, <<"D15099BF97EA278C314796564A0A83E7A65D1E957E691F354E468BBF9DEDF8B5">>}]},
+{pkg_hash_ext,[
+ {<<"roadrunner">>, <<"0CEDBBEE5FC95437987C227E577215AB0912E7126BA8B65A6CA4043DFCF2116C">>}]}
+].
