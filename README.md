@@ -12,16 +12,11 @@ list, describe and call your services.
 
 ## Installation
 
-Roadrunner's gRPC is on its main branch and not yet in a Hex release, so
-for now both come from git. Add them to your `rebar.config`, with
-`rebar3_gpb_plugin` to generate the gpb module from your `.proto` files:
+Add both to your `rebar.config`, with `rebar3_gpb_plugin` to generate the gpb
+module from your `.proto` files:
 
 ```erlang
-{deps, [
-    {roadrunner, {git, "https://github.com/arizona-framework/roadrunner.git", {branch, "main"}}},
-    {roadrunner_grpc_protobuf,
-        {git, "https://github.com/arizona-framework/roadrunner_grpc_protobuf.git", {branch, "main"}}}
-]}.
+{deps, [roadrunner, roadrunner_grpc_protobuf]}.
 
 {plugins, [rebar3_gpb_plugin]}.
 {gpb_opts, [
